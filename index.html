@@ -4,105 +4,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analytics Dashboard</title>
-
-    <!-- Fonts -->
+    <title>Social Listening Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
-    <!-- Styles -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-
-    <!-- Libraries (CDNs) -->
-    <!-- Chart.js for Visualizations -->
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- PapaParse for CSV Parsing -->
+    <!-- PapaParse -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 
 <body>
 
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="hidden">
+    <div id="loading-overlay">
         <div class="spinner"></div>
     </div>
 
-    <!-- Dashboard Screen -->
-    <div id="dashboard-screen">
-        <header>
-            <div class="header-content">
-                <div class="logo">Analytics Dashboard</div>
-                <button id="logout-btn" class="logout-btn">Sign Out</button>
-            </div>
-        </header>
-
-        <main class="container">
-            <!-- Stats Row -->
-            <div class="stats-grid" id="stats-container">
-                <!-- Stats will be injected here by JS -->
-                <div class="stat-card">
-                    <div class="stat-title">Total Views</div>
-                    <div class="stat-value">Loading...</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Active Users</div>
-                    <div class="stat-value">Loading...</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Conversion Rate</div>
-                    <div class="stat-value">Loading...</div>
-                </div>
+    <div id="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span>📊 SM Tracking</span>
             </div>
 
-            <!-- Charts Row 1: Core Metrics -->
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <h2>Growth Trend</h2>
-                    <div class="chart-container">
-                        <canvas id="mainChart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-card">
-                    <h2>User Distribution</h2>
-                    <div class="chart-container">
-                        <canvas id="pieChart"></canvas>
-                    </div>
-                </div>
+            <!-- Global Filters -->
+            <div class="filter-group">
+                <div class="filter-label">Analysis Week</div>
+                <select id="filter-week">
+                    <option>Loading...</option>
+                </select>
             </div>
 
-            <!-- Charts Row 2: Advanced Analytics -->
-            <div class="charts-grid" style="margin-top: 1.5rem;">
-                <div class="chart-card">
-                    <h2>Weekly Analysis Ranking</h2>
-                    <div class="chart-container">
-                        <canvas id="weeklyChart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-card">
-                    <h2>Social Media Sentiment</h2>
-                    <div class="chart-container">
-                        <canvas id="socialChart"></canvas>
-                    </div>
-                </div>
+            <div class="filter-group">
+                <div class="filter-label">Industry Type</div>
+                <select id="filter-type" multiple size="5">
+                    <!-- Populated by JS -->
+                </select>
+                <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 4px;">Hold Ctrl/Cmd to select multiple</div>
             </div>
 
-            <!-- Google Sheet Embed -->
-            <div class="chart-card" style="margin-top: 1.5rem;">
-                <h2>Live Data Source</h2>
-                <div
-                    style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 0.5rem;">
-                    <iframe id="sheet-frame" src="about:blank"
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;"
-                        allowfullscreen>
-                    </iframe>
-                </div>
+            <div class="filter-group">
+                <div class="filter-label">Brand / Platform</div>
+                <select id="filter-brand" multiple size="5">
+                    <!-- Populated by JS -->
+                </select>
             </div>
+
+            <div class="filter-group">
+                <div class="filter-label">Min Engagement</div>
+                <input type="range" id="filter-engagement" min="0" max="100000" step="1000" value="0">
+                <div id="engagement-val" style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">0+</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Navigation -->
+            <nav class="top-nav">
+                <div class="nav-tabs">
+                    <div class="nav-tab active" data-tab="overview">Overview</div>
+                    <div class="nav-tab" data-tab="casino">Casino Deep Dive</div>
+                    <div class="nav-tab" data-tab="industry">Industry Comparison</div>
+                    <div class="nav-tab" data-tab="movers">Brand Movers</div>
+                    <div class="nav-tab" data-tab="followers">Follower Growth</div>
+                    <div class="nav-tab" data-tab="content">Content Analysis</div>
+                </div>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="content-area">
+
+                <!-- TAB 1: OVERVIEW -->
+                <div id="overview" class="tab-pane active">
+                    <div class="kpi-grid" id="overview-kpis">
+                        <!-- Injected by JS -->
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Engagement by Type</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-eng-type"></canvas></div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Posts by Type</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-posts-type"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Followers vs Engagement</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-scatter"></canvas></div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Engagement Trend</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-trend"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: CASINO DEEP DIVE -->
+                <div id="casino" class="tab-pane">
+                    <div class="kpi-grid" id="casino-kpis"></div>
+
+                    <div class="table-container">
+                        <table id="casino-table">
+                            <thead>
+                                <tr>
+                                    <th>Brand</th>
+                                    <th>Platform</th>
+                                    <th>Total Eng.</th>
+                                    <th>Posts</th>
+                                    <th>Avg/Post</th>
+                                    <th>Followers</th>
+                                    <th>WoW Eng %</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Top 10 by Engagement</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-casino-top"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: INDUSTRY COMPARISON -->
+                <div id="industry" class="tab-pane">
+                    <div class="table-container">
+                        <table id="industry-table">
+                            <thead>
+                                <tr>
+                                    <th>Industry Type</th>
+                                    <th>Total Eng.</th>
+                                    <th>Total Posts</th>
+                                    <th>Avg/Post</th>
+                                    <th>Followers</th>
+                                    <th>Share of Voice</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Share of Engagement</div>
+                            </div>
+                            <div class="chart-container"><canvas id="chart-industry-pie"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: MOVERS -->
+                <div id="movers" class="tab-pane">
+                    <div class="charts-row">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Top Gainers (WoW > 20%)</div>
+                            </div>
+                            <div class="table-container" style="border:none; box-shadow:none;">
+                                <table id="gainers-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Brand</th>
+                                            <th>Type</th>
+                                            <th>Prev Eng</th>
+                                            <th>Curr Eng</th>
+                                            <th>Growth %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div class="chart-title">Top Decliners (WoW < -20%)</div>
+                                </div>
+                                <div class="table-container" style="border:none; box-shadow:none;">
+                                    <table id="decliners-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Brand</th>
+                                                <th>Type</th>
+                                                <th>Prev Eng</th>
+                                                <th>Curr Eng</th>
+                                                <th>Decline %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 5: FOLLOWERS -->
+                    <div id="followers" class="tab-pane">
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <div class="chart-title">Top Follower Growth</div>
+                                </div>
+                                <div class="chart-container"><canvas id="chart-follower-growth"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <div class="chart-title">Follower Distribution</div>
+                                </div>
+                                <div class="chart-container"><canvas id="chart-follower-dist"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 6: CONTENT -->
+                    <div id="content" class="tab-pane">
+                        <div class="charts-row">
+                            <div class="chart-card">
+                                <div class="chart-header">
+                                    <div class="chart-title">Content Mix (Video vs Image)</div>
+                                </div>
+                                <div class="chart-container"><canvas id="chart-content-mix"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="content-table">
+                                <thead>
+                                    <tr>
+                                        <th>Brand</th>
+                                        <th>Video Posts</th>
+                                        <th>Image Posts</th>
+                                        <th>Video Eng.</th>
+                                        <th>Image Eng.</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
         </main>
     </div>
 
-    <!-- App Logic -->
-    <!-- Firebase SDKs -->
     <script src="app.js"></script>
 </body>
 
