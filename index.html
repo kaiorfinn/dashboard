@@ -2,192 +2,132 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Competitor Analysis Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <title>Social Media Competitor Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- PapaParse for CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 
 <body>
-
-    <div id="loading" class="loading">
-        <div class="spinner"></div>
-    </div>
-
-    <div id="app-container">
-        <aside class="sidebar">
-            <div class="logo">⚡ Competitor Intel</div>
-
-            <div class="filter-group">
-                <div class="filter-label">Data Source</div>
-                <!-- User can paste their sheet link here if needed, or hardcode in JS -->
-                <input type="text" id="sheet-url" placeholder="Paste Google Sheet CSV Link"
-                    style="font-size:0.7rem; margin-bottom:0.5rem;">
-                <button id="load-btn"
-                    style="width:100%; padding:0.5rem; background:var(--accent-color); border:none; border-radius:4px; cursor:pointer; font-weight:600; color:#000;">Reload
-                    Data</button>
-            </div>
-
-            <div class="filter-group">
-                <div class="filter-label">Filter by Type</div>
-                <select id="filter-type" multiple size="8" style="height: 150px;">
-                    <!-- JS Populated -->
+    <header class="top-bar">
+        <div>
+            <h1>PH iGaming & Fintech – Social Media Dashboard</h1>
+            <p class="subtitle">Based on Master_Data – Weekly Competitive Tracking</p>
+        </div>
+        <div class="filters">
+            <label>
+                Week A
+                <select id="weekASelect"></select>
+            </label>
+            <label>
+                Week B
+                <select id="weekBSelect"></select>
+            </label>
+            <label>
+                Type
+                <select id="typeSelect">
+                    <option value="ALL">All Types</option>
                 </select>
+            </label>
+        </div>
+    </header>
+
+    <main class="layout">
+
+        <!-- KPI Cards -->
+        <section class="panel panel-kpis">
+            <h2>High-level KPIs</h2>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Engagement (Week A)</div>
+                    <div class="kpi-value" id="kpi-eng-weekA">–</div>
+                    <div class="kpi-sub" id="kpi-eng-weekA-detail"></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Engagement (Week B)</div>
+                    <div class="kpi-value" id="kpi-eng-weekB">–</div>
+                    <div class="kpi-sub" id="kpi-eng-weekB-detail"></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">WoW Δ Engagement</div>
+                    <div class="kpi-value" id="kpi-eng-wow">–</div>
+                    <div class="kpi-sub" id="kpi-eng-wow-detail"></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Brands Tracked</div>
+                    <div class="kpi-value" id="kpi-brands">–</div>
+                    <div class="kpi-sub" id="kpi-types">–</div>
+                </div>
             </div>
+        </section>
 
-            <div class="filter-group">
-                <div class="filter-label">Filter by Brand</div>
-                <select id="filter-brand" multiple size="8" style="height: 150px;">
-                    <!-- JS Populated -->
-                </select>
+        <!-- Charts row 1 -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Engagement by Type (Week A)</h2>
+                <span class="panel-note" id="typeChartWeekLabel"></span>
             </div>
-        </aside>
+            <canvas id="typeChart"></canvas>
+        </section>
 
-        <main class="main-content">
-            <nav class="top-nav">
-                <div class="nav-tabs">
-                    <div class="nav-tab active" data-tab="industry">Industry Overview</div>
-                    <div class="nav-tab" data-tab="brand">Brand Performance</div>
-                    <div class="nav-tab" data-tab="category">Category Analysis</div>
-                    <div class="nav-tab" data-tab="content">Content Insights</div>
-                    <div class="nav-tab" data-tab="report">Weekly Report</div>
-                </div>
-            </nav>
-
-            <div class="content-area">
-
-                <!-- PAGE 1: INDUSTRY OVERVIEW -->
-                <div id="industry" class="tab-pane active">
-                    <div class="text-module" id="ceo-summary">
-                        <!-- Auto-generated CEO Summary -->
-                        Loading Summary...
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="card">
-                            <div class="card-title">Interaction Volume by Type</div>
-                            <div class="chart-container"><canvas id="chart-type-vol"></canvas></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title">Top 5 Brands (Share of Voice)</div>
-                            <div class="chart-container"><canvas id="chart-top5-pie"></canvas></div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">Follower Growth (WoW %) - Radar Scan</div>
-                        <div class="chart-container" style="height: 400px;"><canvas id="chart-radar-growth"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PAGE 2: BRAND PERFORMANCE -->
-                <div id="brand" class="tab-pane">
-                    <div class="grid-2">
-                        <div class="card">
-                            <div class="card-title">Brand Interaction (WoW Comparison)</div>
-                            <div class="chart-container"><canvas id="chart-brand-wow"></canvas></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title">Avg Engagement / Post</div>
-                            <div class="chart-container"><canvas id="chart-brand-avg"></canvas></div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">Detailed Brand Metrics</div>
-                        <div style="overflow-x:auto;">
-                            <table id="brand-table">
-                                <thead>
-                                    <tr>
-                                        <th>Brand</th>
-                                        <th>Total Posts</th>
-                                        <th>Video/Image</th>
-                                        <th>Total Eng.</th>
-                                        <th>Eng. Rate</th>
-                                        <th>WoW Eng.</th>
-                                        <th>Followers</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PAGE 3: CATEGORY ANALYSIS -->
-                <div id="category" class="tab-pane">
-                    <div class="grid-2">
-                        <div class="card">
-                            <div class="card-title">Video Ratio by Category</div>
-                            <div class="chart-container"><canvas id="chart-cat-video"></canvas></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title">Follower Growth by Category</div>
-                            <div class="chart-container"><canvas id="chart-cat-growth"></canvas></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PAGE 4: CONTENT INSIGHTS -->
-                <div id="content" class="tab-pane">
-                    <div class="grid-2">
-                        <div class="card">
-                            <div class="card-title">Video vs Image Performance</div>
-                            <div class="chart-container"><canvas id="chart-content-mix"></canvas></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title">Content Strategy Keywords</div>
-                            <div id="word-cloud"
-                                style="height:300px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; padding:20px;">
-                                <!-- Simple HTML Word Cloud -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="card">
-                            <div class="card-title">🏆 Top Performing Content</div>
-                            <table id="top-content-table">
-                                <thead>
-                                    <tr>
-                                        <th>Brand</th>
-                                        <th>Type</th>
-                                        <th>Engagement</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                        <div class="card">
-                            <div class="card-title">⚠️ Needs Improvement</div>
-                            <table id="worst-content-table">
-                                <thead>
-                                    <tr>
-                                        <th>Brand</th>
-                                        <th>Type</th>
-                                        <th>Engagement</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PAGE 5: WEEKLY REPORT -->
-                <div id="report" class="tab-pane">
-                    <div class="report-container" id="weekly-report-text">
-                        <!-- Auto Generated Report -->
-                    </div>
-                </div>
-
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Top 10 Brands by Engagement (Week A)</h2>
+                <span class="panel-note" id="brandChartWeekLabel"></span>
             </div>
-        </main>
-    </div>
+            <canvas id="brandChart"></canvas>
+        </section>
+
+        <!-- Charts row 2 -->
+        <section class="panel panel-wide">
+            <div class="panel-header">
+                <h2>Top Movers – WoW Engagement Δ (Brand Level)</h2>
+                <span class="panel-note" id="moverChartWeekLabel"></span>
+            </div>
+            <canvas id="moverChart"></canvas>
+        </section>
+
+        <!-- Table -->
+        <section class="panel panel-wide">
+            <div class="panel-header">
+                <h2>Brand Detail – Week A vs Week B</h2>
+                <span class="panel-note" id="tableWeekLabel"></span>
+            </div>
+            <div class="table-wrapper">
+                <table id="brandTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Brand</th>
+                            <th>Type</th>
+                            <th>Eng A</th>
+                            <th>Eng B</th>
+                            <th>WoW Δ</th>
+                            <th>WoW Δ%</th>
+                            <th>Posts A</th>
+                            <th>Posts B</th>
+                            <th>Followers B</th>
+                            <th>ER B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        Data source: Master_Data (Google Sheet). Dashboard logic: brand × week × type, WoW comparison.
+    </footer>
 
     <script src="app.js"></script>
 </body>

@@ -1,414 +1,473 @@
-// Configuration
-// Default to the user's sheet, but we need to ensure it matches the NEW structure.
-const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOfuB3T9ozdzxhTVT_vcudJsTv0khkrd-iIBJmSgi0UWGdOoZ_ObbPzsZ445VX-2XhYwIlKFYhd0V7/pub?output=csv";
+// ==============================
+// CONFIG – UPDATE THIS PART ONLY
+// ==============================
 
-// Global State
-let rawData = [];
-let filteredData = [];
-let charts = {};
+// If you use Google Sheet, publish as CSV and put the URL here.
+const DATA_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOfuB3T9ozdzxhTVT_vcudJsTv0khkrd-iIBJmSgi0UWGdOoZ_ObbPzsZ445VX-2XhYwIlKFYhd0V7/pub?output=csv';
 
-// DOM Elements
-const els = {
-    loading: document.getElementById('loading'),
-    sheetInput: document.getElementById('sheet-url'),
-    loadBtn: document.getElementById('load-btn'),
-    tabs: document.querySelectorAll('.nav-tab'),
-    panes: document.querySelectorAll('.tab-pane'),
-    filters: {
-        type: document.getElementById('filter-type'),
-        brand: document.getElementById('filter-brand')
-    }
+// Map your column headers here.
+const COL = {
+    week: 'Week',
+    type: 'Type',
+    brand: 'Platform Name',
+    totalPosts: 'Total Posts',
+    totalEngagement: 'Total Engagement',
+    followers: 'Followers',
+    engagementRate: 'Engagement Rate (%)',
 };
 
-// --- Initialization ---
+// Number of brands to show in charts
+const TOP_N_BRANDS = 10;
+const TOP_N_MOVERS = 10;
 
-init();
+// ==============================
+// CORE LOGIC
+// ==============================
 
-function init() {
-    els.sheetInput.value = DEFAULT_SHEET_URL;
+let rawRows = [];
+let weekOptions = [];
+let typeOptions = [];
 
-    // Event Listeners
-    els.loadBtn.addEventListener('click', () => loadData(els.sheetInput.value));
+let charts = {
+    typeChart: null,
+    brandChart: null,
+    moverChart: null,
+};
 
-    els.tabs.forEach(tab => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-    });
+document.addEventListener('DOMContentLoaded', () => {
+    loadData();
+});
 
-    els.filters.type.addEventListener('change', applyFilters);
-    els.filters.brand.addEventListener('change', applyFilters);
-
-    // Initial Load
-    loadData(DEFAULT_SHEET_URL);
-}
-
-function switchTab(tabId) {
-    els.tabs.forEach(t => t.classList.remove('active'));
-    els.panes.forEach(p => p.classList.remove('active'));
-
-    document.querySelector(`.nav-tab[data-tab="${tabId}"]`).classList.add('active');
-    document.getElementById(tabId).classList.add('active');
-
-    // Resize charts
-    Object.values(charts).forEach(c => c.resize());
-}
-
-// --- Data Loading & Parsing ---
-
-async function loadData(url) {
-    els.loading.classList.remove('hidden');
-
-    Papa.parse(url, {
+function loadData() {
+    Papa.parse(DATA_URL, {
         download: true,
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-            console.log("Raw CSV:", results.data);
-            processData(results.data);
-            els.loading.classList.add('hidden');
+            rawRows = results.data.map(normalizeRow).filter((r) => !!r[COL.week]);
+
+            weekOptions = [...new Set(rawRows.map((r) => r[COL.week]))].sort();
+            typeOptions = [...new Set(rawRows.map((r) => r[COL.type]))].sort();
+
+            initSelectors();
+            updateDashboard();
         },
         error: (err) => {
-            console.error(err);
-            // Fallback to Demo Data if CSV fails or is invalid
-            console.warn("CSV Load Failed. Using Demo Data.");
-            processData(getDemoData());
-            els.loading.classList.add('hidden');
-        }
+            console.error('CSV parse error', err);
+            alert('Failed to load data. Check DATA_URL or CSV format.');
+        },
     });
 }
 
-function processData(data) {
-    // 1. Clean & Normalize Data
-    // We expect columns: Brand, Type, Total Engagement, etc.
-    // If columns are missing (e.g. "Wide" format), we try to adapt or use defaults.
+function normalizeRow(row) {
+    const num = (v) => {
+        if (v === null || v === undefined || v === '') return 0;
+        const cleaned = String(v).replace(/,/g, '');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+    };
 
-    rawData = data.map(row => {
-        // Helper to parse numbers with commas/percent
-        const num = (key) => {
-            let val = row[key] || "0";
-            if (typeof val === 'string') {
-                val = val.replace(/,/g, '').replace(/%/g, '');
-            }
-            return parseFloat(val) || 0;
-        };
+    row[COL.totalPosts] = num(row[COL.totalPosts]);
+    row[COL.totalEngagement] = num(row[COL.totalEngagement]);
+    row[COL.followers] = num(row[COL.followers]);
+    row[COL.engagementRate] = num(row[COL.engagementRate]);
 
-        // Check if we have the specific columns requested
-        // If not, we might be looking at the "Wide" format (Dates).
-        // ADAPTER: If "Total Engagement" is missing, try to find the last date column.
-        let totalEng = num('Total Engagement');
-        let followers = num('Followers (Current Week)');
+    return row;
+}
 
-        // If specific columns are 0/missing, check for Date columns (fallback logic)
-        if (totalEng === 0 && followers === 0) {
-            const keys = Object.keys(row);
-            const dateKeys = keys.filter(k => /^\d{1,2}-[A-Z][a-z]{2}$/.test(k)); // e.g. 9-Nov
-            if (dateKeys.length > 0) {
-                const lastDate = dateKeys[dateKeys.length - 1];
-                const prevDate = dateKeys[dateKeys.length - 2];
-                totalEng = num(lastDate); // Assume the date column holds the main metric
-                // We can't know if it's Eng or Followers, but let's assume Eng for the dashboard to light up
-            }
-        }
+// -----------------------------
+// UI INIT
+// -----------------------------
 
-        return {
-            brand: row['Brand'] || row['Platform Name'] || 'Unknown',
-            type: row['Type'] || 'Other',
+function initSelectors() {
+    const weekASelect = document.getElementById('weekASelect');
+    const weekBSelect = document.getElementById('weekBSelect');
+    const typeSelect = document.getElementById('typeSelect');
 
-            // Metrics
-            posts: num('Total Posts') || 10, // Default to avoid div/0
-            videoPosts: num('Video Posts') || num('Video') || 0,
-            imagePosts: num('Image Posts') || num('Image') || 0,
+    weekASelect.innerHTML = '';
+    weekBSelect.innerHTML = '';
 
-            engagement: totalEng,
-            prevEngagement: num('Total Engagement (Prev)') || (totalEng * 0.9), // Simulate if missing
+    weekOptions.forEach((w) => {
+        const optA = document.createElement('option');
+        optA.value = w;
+        optA.textContent = w;
+        weekASelect.appendChild(optA);
 
-            followers: followers || num('Followers') || 0,
-            prevFollowers: num('Followers (Previous Week)') || (followers * 0.95),
-
-            // Calculated
-            engRate: num('Engagement Rate (%)'),
-            wowEng: num('Week on Week Δ Engagement %'),
-            wowFoll: num('Week on Week Δ Followers %')
-        };
+        const optB = document.createElement('option');
+        optB.value = w;
+        optB.textContent = w;
+        weekBSelect.appendChild(optB);
     });
 
-    // 2. Populate Filters
-    const types = [...new Set(rawData.map(d => d.type))].sort();
-    const brands = [...new Set(rawData.map(d => d.brand))].sort();
+    // default: weekA = latest, weekB = previous
+    if (weekOptions.length > 0) {
+        weekASelect.value = weekOptions[weekOptions.length - 1];
+        if (weekOptions.length > 1) {
+            weekBSelect.value = weekOptions[weekOptions.length - 2];
+        } else {
+            weekBSelect.value = weekOptions[weekOptions.length - 1];
+        }
+    }
 
-    els.filters.type.innerHTML = types.map(t => `<option value="${t}" selected>${t}</option>`).join('');
-    els.filters.brand.innerHTML = brands.map(b => `<option value="${b}" selected>${b}</option>`).join('');
+    // type select
+    typeOptions.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSelect.appendChild(opt);
+    });
 
-    // 3. Initial Render
-    applyFilters();
+    weekASelect.addEventListener('change', updateDashboard);
+    weekBSelect.addEventListener('change', updateDashboard);
+    typeSelect.addEventListener('change', updateDashboard);
 }
 
-function applyFilters() {
-    const selectedTypes = Array.from(els.filters.type.selectedOptions).map(o => o.value);
-    const selectedBrands = Array.from(els.filters.brand.selectedOptions).map(o => o.value);
-
-    filteredData = rawData.filter(d => selectedTypes.includes(d.type) && selectedBrands.includes(d.brand));
-
-    updateDashboard();
-}
-
-// --- Dashboard Rendering ---
+// -----------------------------
+// DASHBOARD UPDATE
+// -----------------------------
 
 function updateDashboard() {
-    renderIndustryOverview();
-    renderBrandPerformance();
-    renderCategoryAnalysis();
-    renderContentInsights();
-    renderWeeklyReport();
+    const weekA = document.getElementById('weekASelect').value;
+    const weekB = document.getElementById('weekBSelect').value;
+    const typeFilter = document.getElementById('typeSelect').value;
+
+    const rowsA = filterRows(rawRows, weekA, typeFilter);
+    const rowsB = filterRows(rawRows, weekB, typeFilter);
+
+    updateKpis(rowsA, rowsB, weekA, weekB, typeFilter);
+    renderTypeChart(rowsA, weekA);
+    renderBrandChart(rowsA, weekA);
+    renderMoversChart(rowsA, rowsB, weekA, weekB);
+    renderTable(rowsA, rowsB, weekA, weekB);
 }
 
-// 1. Industry Overview
-function renderIndustryOverview() {
-    // CEO Summary
-    const totalEng = filteredData.reduce((s, i) => s + i.engagement, 0);
-    const prevEng = filteredData.reduce((s, i) => s + i.prevEngagement, 0);
-    const pctChange = ((totalEng - prevEng) / prevEng * 100).toFixed(1);
-
-    const sortedByGrowth = [...filteredData].sort((a, b) => b.wowEng - a.wowEng);
-    const topGrowers = sortedByGrowth.slice(0, 2);
-    const topDecliners = sortedByGrowth.reverse().slice(0, 2);
-
-    const summaryHTML = `
-        <strong class="text-gold">CEO Summary:</strong><br>
-        本周全行业互动从 <strong>${prevEng.toLocaleString()}</strong> 变动至 <strong>${totalEng.toLocaleString()}</strong> (<span class="${pctChange >= 0 ? 'text-green' : 'text-red'}">${pctChange}%</span>)。
-        <br><br>
-        🚀 <strong>主要增长:</strong> ${topGrowers.map(b => `${b.brand} (${b.wowEng}%)`).join(', ')}
-        <br>
-        🔻 <strong>主要下滑:</strong> ${topDecliners.map(b => `${b.brand} (${b.wowEng}%)`).join(', ')}
-        <br><br>
-        行业趋势持续向「视频内容 + IP 联动」倾斜，${topGrowers[0]?.brand || '头部品牌'} 表现最为突出。
-    `;
-    document.getElementById('ceo-summary').innerHTML = summaryHTML;
-
-    // Charts
-    // Agg by Type
-    const byType = {};
-    filteredData.forEach(d => {
-        if (!byType[d.type]) byType[d.type] = 0;
-        byType[d.type] += d.engagement;
-    });
-
-    createChart('chart-type-vol', 'bar', {
-        labels: Object.keys(byType),
-        datasets: [{
-            label: 'Interaction Volume',
-            data: Object.values(byType),
-            backgroundColor: '#D4AF37',
-            borderRadius: 4
-        }]
-    });
-
-    // Top 5 Pie
-    const top5 = [...filteredData].sort((a, b) => b.engagement - a.engagement).slice(0, 5);
-    createChart('chart-top5-pie', 'doughnut', {
-        labels: top5.map(d => d.brand),
-        datasets: [{
-            data: top5.map(d => d.engagement),
-            backgroundColor: ['#D4AF37', '#F4C430', '#B8860B', '#DAA520', '#8B6508'],
-            borderWidth: 0
-        }]
-    });
-
-    // Radar Growth
-    const topGrowth = [...filteredData].sort((a, b) => b.wowFoll - a.wowFoll).slice(0, 6);
-    createChart('chart-radar-growth', 'radar', {
-        labels: topGrowth.map(d => d.brand),
-        datasets: [{
-            label: 'Follower Growth %',
-            data: topGrowth.map(d => d.wowFoll),
-            borderColor: '#4ade80',
-            backgroundColor: 'rgba(74, 222, 128, 0.2)'
-        }]
+function filterRows(rows, week, typeFilter) {
+    return rows.filter((r) => {
+        const matchWeek = r[COL.week] === week;
+        const matchType = typeFilter === 'ALL' || r[COL.type] === typeFilter;
+        return matchWeek && matchType;
     });
 }
 
-// 2. Brand Performance
-function renderBrandPerformance() {
-    const topBrands = filteredData.slice(0, 15); // Limit to 15 for readability
+// -----------------------------
+// KPI CARDS
+// -----------------------------
 
-    createChart('chart-brand-wow', 'bar', {
-        labels: topBrands.map(d => d.brand),
-        datasets: [{
-            label: 'WoW Engagement %',
-            data: topBrands.map(d => d.wowEng),
-            backgroundColor: topBrands.map(d => d.wowEng >= 0 ? '#4ade80' : '#f87171')
-        }]
-    });
+function updateKpis(rowsA, rowsB, weekA, weekB, typeFilter) {
+    const totEngA = sum(rowsA, COL.totalEngagement);
+    const totEngB = sum(rowsB, COL.totalEngagement);
+    const wowAbs = totEngB - totEngA;
+    const wowPct = totEngA === 0 ? 0 : (wowAbs / totEngA) * 100;
 
-    // Bubble Chart: Avg Eng
-    const bubbleData = topBrands.map(d => ({
-        x: d.posts,
-        y: d.engagement / d.posts,
-        r: Math.min(d.engagement / 10000, 30) // Scale bubble
-    }));
-    createChart('chart-brand-avg', 'bubble', {
-        datasets: [{
-            label: 'Avg Eng vs Posts',
-            data: bubbleData,
-            backgroundColor: '#D4AF37'
-        }]
-    });
+    const brandCount = new Set([...rowsA, ...rowsB].map((r) => r[COL.brand])).size;
+    const typeCount = new Set([...rowsA, ...rowsB].map((r) => r[COL.type])).size;
 
-    // Table
-    const tbody = document.querySelector('#brand-table tbody');
-    tbody.innerHTML = filteredData.map(d => `
-        <tr>
-            <td>${d.brand}</td>
-            <td>${d.posts}</td>
-            <td>${d.videoPosts} / ${d.imagePosts}</td>
-            <td>${d.engagement.toLocaleString()}</td>
-            <td>${d.engRate}%</td>
-            <td class="${d.wowEng >= 0 ? 'text-green' : 'text-red'}">${d.wowEng}%</td>
-            <td>${d.followers.toLocaleString()}</td>
-        </tr>
-    `).join('');
+    setText('kpi-eng-weekA', formatNumber(totEngA));
+    setText('kpi-eng-weekB', formatNumber(totEngB));
+
+    setText(
+        'kpi-eng-weekA-detail',
+        `${weekA}${typeFilter !== 'ALL' ? ' · ' + typeFilter : ''}`
+    );
+    setText(
+        'kpi-eng-weekB-detail',
+        `${weekB}${typeFilter !== 'ALL' ? ' · ' + typeFilter : ''}`
+    );
+
+    const wowSpan = wowAbs >= 0 ? '+' + formatNumber(wowAbs) : formatNumber(wowAbs);
+    const wowPctSpan = (wowPct >= 0 ? '+' : '') + wowPct.toFixed(1) + '%';
+
+    setText('kpi-eng-wow', wowSpan);
+    setText(
+        'kpi-eng-wow-detail',
+        `WoW change (${wowPctSpan}) – based on Total Engagement`
+    );
+
+    setText('kpi-brands', brandCount.toString());
+    setText('kpi-types', `${typeCount} type(s)`);
+
+    // small labels
+    setText('typeChartWeekLabel', `Week A：${weekA}`);
+    setText('brandChartWeekLabel', `Week A：${weekA}`);
+    setText('moverChartWeekLabel', `Week A vs Week B：${weekA} → ${weekB}`);
+    setText('tableWeekLabel', `Comparing ${weekA} (A) vs ${weekB} (B)`);
 }
 
-// 3. Category Analysis
-function renderCategoryAnalysis() {
-    // Aggregates
-    const cats = {};
-    filteredData.forEach(d => {
-        if (!cats[d.type]) cats[d.type] = { video: 0, total: 0, follGrowth: 0, count: 0 };
-        cats[d.type].video += d.videoPosts;
-        cats[d.type].total += d.posts;
-        cats[d.type].follGrowth += d.wowFoll;
-        cats[d.type].count++;
-    });
+// -----------------------------
+// CHARTS
+// -----------------------------
 
-    const labels = Object.keys(cats);
+function renderTypeChart(rowsA, weekA) {
+    const ctx = document.getElementById('typeChart').getContext('2d');
+    const grouped = groupBy(rowsA, COL.type);
+    const labels = Object.keys(grouped);
+    const data = labels.map((t) => sum(grouped[t], COL.totalEngagement));
 
-    // Video Ratio
-    createChart('chart-cat-video', 'bar', {
-        labels: labels,
-        datasets: [{
-            label: 'Video Post Ratio %',
-            data: labels.map(l => (cats[l].video / cats[l].total * 100).toFixed(1)),
-            backgroundColor: '#F4C430'
-        }],
-        indexAxis: 'y'
-    });
+    if (charts.typeChart) charts.typeChart.destroy();
 
-    // Growth
-    createChart('chart-cat-growth', 'bar', {
-        labels: labels,
-        datasets: [{
-            label: 'Avg Follower Growth %',
-            data: labels.map(l => (cats[l].follGrowth / cats[l].count).toFixed(2)),
-            backgroundColor: '#4ade80'
-        }]
-    });
-}
-
-// 4. Content Insights
-function renderContentInsights() {
-    // Video vs Image Mix
-    const totalVideo = filteredData.reduce((s, i) => s + i.videoPosts, 0);
-    const totalImage = filteredData.reduce((s, i) => s + i.imagePosts, 0);
-
-    createChart('chart-content-mix', 'pie', {
-        labels: ['Video Posts', 'Image Posts'],
-        datasets: [{
-            data: [totalVideo, totalImage],
-            backgroundColor: ['#D4AF37', '#333333']
-        }]
-    });
-
-    // Word Cloud (Simple List)
-    const keywords = ["Jackpot", "Bonus", "Win", "Live", "Cash", "Free Spins", "Rewards", "VIP", "Event", "Promo"];
-    const cloudHTML = keywords.map(k =>
-        `<span style="font-size: ${Math.random() * 1.5 + 0.8}rem; color: ${Math.random() > 0.5 ? '#D4AF37' : '#fff'}; opacity: ${Math.random() * 0.5 + 0.5}; margin: 5px;">${k}</span>`
-    ).join('');
-    document.getElementById('word-cloud').innerHTML = cloudHTML;
-
-    // Tables
-    const sorted = [...filteredData].sort((a, b) => b.engagement - a.engagement);
-
-    document.querySelector('#top-content-table tbody').innerHTML = sorted.slice(0, 5).map(d => `
-        <tr><td>${d.brand}</td><td>${d.type}</td><td class="text-gold">${d.engagement.toLocaleString()}</td></tr>
-    `).join('');
-
-    document.querySelector('#worst-content-table tbody').innerHTML = sorted.reverse().slice(0, 5).map(d => `
-        <tr><td>${d.brand}</td><td>${d.type}</td><td class="text-red">${d.engagement.toLocaleString()}</td></tr>
-    `).join('');
-}
-
-// 5. Weekly Report Generator
-function renderWeeklyReport() {
-    const totalEng = filteredData.reduce((s, i) => s + i.engagement, 0);
-    const gainers = filteredData.filter(d => d.wowEng > 20).map(d => d.brand).join(', ');
-    const losers = filteredData.filter(d => d.wowEng < -20).map(d => d.brand).join(', ');
-
-    const reportHTML = `
-        <h1>Social Media Weekly Report</h1>
-        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-
-        <h2>1. 行业整体表现</h2>
-        <p>本周全行业总互动量达到 <strong>${totalEng.toLocaleString()}</strong>。整体市场呈现${totalEng > 5000000 ? '活跃' : '平稳'}态势。视频内容的占比持续提升，成为驱动互动的主要因素。</p>
-
-        <h2>2. 明显增长品牌 (WoW > +20%)</h2>
-        <p>本周表现亮眼的品牌包括：<strong>${gainers || '无显著增长品牌'}</strong>。这些品牌主要通过高频次的视频发布和活动营销实现了数据的快速拉升。</p>
-
-        <h2>3. 显著下滑品牌 (WoW < -20%)</h2>
-        <p>需关注的下滑品牌包括：<strong>${losers || '无显著下滑品牌'}</strong>。建议检查其内容发布频率及平台算法影响。</p>
-
-        <h2>4. 综合洞察 (Industry Insights)</h2>
-        <ul>
-            <li><strong>头部 VS 腰尾部分化：</strong> 头部品牌（如 ${filteredData[0]?.brand}）占据了市场超过 40% 的声量，马太效应加剧。</li>
-            <li><strong>视频内容驱动增长：</strong> 数据显示，视频内容的平均互动率比图片高出 35%，建议加大短视频投入。</li>
-            <li><strong>Online Casino 竞争：</strong> 进入“内容质量竞争阶段”，单纯的素材堆砌已难以获得高流量，需注重 IP 包装。</li>
-            <li><strong>Fintech & Loan：</strong> 受周期性因素影响，本周互动量略有回落，属于正常波动。</li>
-        </ul>
-    `;
-    document.getElementById('weekly-report-text').innerHTML = reportHTML;
-}
-
-// --- Helper: Chart Creator ---
-function createChart(id, type, data, options = {}) {
-    const ctx = document.getElementById(id);
-    if (!ctx) return;
-    if (charts[id]) charts[id].destroy();
-
-    charts[id] = new Chart(ctx, {
-        type: type,
-        data: data,
+    charts.typeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: `Total Engagement – ${weekA}`,
+                    data,
+                },
+            ],
+        },
         options: {
             responsive: true,
-            maintainAspectRatio: false,
             plugins: {
-                legend: { labels: { color: '#a0a0a0' } }
+                legend: { display: false },
             },
-            scales: type !== 'pie' && type !== 'doughnut' && type !== 'radar' ? {
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#a0a0a0' } },
-                x: { grid: { display: false }, ticks: { color: '#a0a0a0' } }
-            } : {
-                r: { grid: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#fff' } }
+            scales: {
+                x: {
+                    ticks: { color: '#9ca3af', font: { size: 10 } },
+                    grid: { display: false },
+                },
+                y: {
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: (v) => formatShortNumber(v),
+                    },
+                    grid: { color: 'rgba(55,65,81,0.5)' },
+                },
             },
-            ...options
-        }
+        },
     });
 }
 
-// --- Demo Data Generator ---
-function getDemoData() {
-    const brands = ['Nustar', 'Okada', 'Solaire', 'GCash', 'Maya', 'BingoPlus', 'ArenaPlus'];
-    const types = ['IR Casino', 'IR Casino', 'IR Casino', 'Fintech', 'Fintech', 'Online Casino', 'Online Casino'];
-
-    return brands.map((b, i) => ({
-        'Brand': b,
-        'Type': types[i],
-        'Total Posts': Math.floor(Math.random() * 50) + 10,
-        'Video Posts': Math.floor(Math.random() * 20),
-        'Image Posts': Math.floor(Math.random() * 30),
-        'Total Engagement': Math.floor(Math.random() * 500000) + 50000,
-        'Total Engagement (Prev)': Math.floor(Math.random() * 500000) + 50000,
-        'Engagement Rate (%)': (Math.random() * 5).toFixed(2),
-        'Followers (Current Week)': Math.floor(Math.random() * 2000000) + 100000,
-        'Week on Week Δ Engagement %': (Math.random() * 100 - 30).toFixed(1),
-        'Week on Week Δ Followers %': (Math.random() * 10 - 2).toFixed(1)
+function renderBrandChart(rowsA, weekA) {
+    const ctx = document.getElementById('brandChart').getContext('2d');
+    const grouped = groupBy(rowsA, COL.brand);
+    const brands = Object.keys(grouped).map((b) => ({
+        brand: b,
+        type: grouped[b][0][COL.type],
+        engagement: sum(grouped[b], COL.totalEngagement),
     }));
+
+    brands.sort((a, b) => b.engagement - a.engagement);
+    const top = brands.slice(0, TOP_N_BRANDS);
+
+    const labels = top.map((b) => b.brand);
+    const data = top.map((b) => b.engagement);
+
+    if (charts.brandChart) charts.brandChart.destroy();
+
+    charts.brandChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: `Total Engagement – ${weekA}`,
+                    data,
+                },
+            ],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: (v) => formatShortNumber(v),
+                    },
+                    grid: { color: 'rgba(55,65,81,0.5)' },
+                },
+                y: {
+                    ticks: { color: '#9ca3af', font: { size: 10 } },
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+}
+
+function renderMoversChart(rowsA, rowsB, weekA, weekB) {
+    const ctx = document.getElementById('moverChart').getContext('2d');
+
+    const byBrandWeek = {};
+    [...rowsA, ...rowsB].forEach((r) => {
+        const brand = r[COL.brand];
+        const week = r[COL.week];
+        const key = `${brand}__${week}`;
+        byBrandWeek[key] = (byBrandWeek[key] || 0) + r[COL.totalEngagement];
+    });
+
+    const brands = new Set([...rowsA, ...rowsB].map((r) => r[COL.brand]));
+    const movers = [];
+
+    brands.forEach((brand) => {
+        const a = byBrandWeek[`${brand}__${weekA}`] || 0;
+        const b = byBrandWeek[`${brand}__${weekB}`] || 0;
+        const diff = b - a;
+        const pct = a === 0 ? (b === 0 ? 0 : 100) : (diff / a) * 100;
+        if (!isFinite(pct)) return;
+        movers.push({ brand, diff, pct });
+    });
+
+    movers.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+    const top = movers.slice(0, TOP_N_MOVERS);
+
+    const labels = top.map((m) => m.brand);
+    const data = top.map((m) => m.pct);
+
+    if (charts.moverChart) charts.moverChart.destroy();
+
+    charts.moverChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: `WoW Δ% (${weekA}→${weekB})`,
+                    data,
+                },
+            ],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: (v) => v + '%',
+                    },
+                    grid: { color: 'rgba(55,65,81,0.5)' },
+                },
+                y: {
+                    ticks: { color: '#9ca3af', font: { size: 10 } },
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+}
+
+// -----------------------------
+// TABLE
+// -----------------------------
+
+function renderTable(rowsA, rowsB, weekA, weekB) {
+    const tbody = document.querySelector('#brandTable tbody');
+    tbody.innerHTML = '';
+
+    const byBrandWeek = {};
+    const brandsSet = new Set();
+
+    function addRow(row) {
+        const brand = row[COL.brand];
+        const week = row[COL.week];
+        brandsSet.add(brand);
+        const key = `${brand}__${week}`;
+        if (!byBrandWeek[key]) {
+            byBrandWeek[key] = {
+                engagement: 0,
+                posts: 0,
+                followers: row[COL.followers] || 0,
+                er: row[COL.engagementRate] || 0,
+                type: row[COL.type],
+            };
+        }
+        byBrandWeek[key].engagement += row[COL.totalEngagement];
+        byBrandWeek[key].posts += row[COL.totalPosts];
+    }
+
+    rowsA.forEach(addRow);
+    rowsB.forEach(addRow);
+
+    const rows = [];
+
+    brandsSet.forEach((brand) => {
+        const a = byBrandWeek[`${brand}__${weekA}`] || {};
+        const b = byBrandWeek[`${brand}__${weekB}`] || {};
+
+        const engA = a.engagement || 0;
+        const engB = b.engagement || 0;
+        const diff = engB - engA;
+        const pct = engA === 0 ? (engB === 0 ? 0 : 100) : (diff / engA) * 100;
+
+        rows.push({
+            brand,
+            type: a.type || b.type || '',
+            engA,
+            engB,
+            diff,
+            pct,
+            postsA: a.posts || 0,
+            postsB: b.posts || 0,
+            followersB: b.followers || a.followers || 0,
+            erB: b.er || '',
+        });
+    });
+
+    rows.sort((a, b) => b.engB - a.engB);
+
+    rows.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+
+        const diffClass = r.diff >= 0 ? 'badge-pos' : 'badge-neg';
+        const pctClass = r.pct >= 0 ? 'badge-pos' : 'badge-neg';
+
+        tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td>${r.brand}</td>
+      <td>${r.type}</td>
+      <td>${formatShortNumber(r.engA)}</td>
+      <td>${formatShortNumber(r.engB)}</td>
+      <td class="${diffClass}">${r.diff >= 0 ? '+' : ''}${formatShortNumber(
+            r.diff
+        )}</td>
+      <td class="${pctClass}">${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%</td>
+      <td>${r.postsA}</td>
+      <td>${r.postsB}</td>
+      <td>${r.followersB ? formatShortNumber(r.followersB) : '–'}</td>
+      <td>${r.erB !== '' ? r.erB.toFixed ? r.erB.toFixed(2) + '%' : r.erB : '–'}</td>
+    `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+// -----------------------------
+// HELPERS
+// -----------------------------
+
+function sum(rows, col) {
+    return rows.reduce((acc, r) => acc + (r[col] || 0), 0);
+}
+
+function groupBy(rows, col) {
+    return rows.reduce((acc, r) => {
+        const key = r[col] || 'Unknown';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(r);
+        return acc;
+    }, {});
+}
+
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function formatNumber(n) {
+    return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+function formatShortNumber(n) {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (abs >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toFixed ? n.toFixed(0) : String(n);
 }
