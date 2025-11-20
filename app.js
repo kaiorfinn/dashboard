@@ -2,10 +2,11 @@
 // ⚙️ USER CONFIGURATION (EDIT THIS SECTION)
 // ==========================================
 
-// GOOGLE SHEET URL
-// File -> Share -> Publish to web -> Select "Sheet1" -> Select "Comma-separated values (.csv)"
-// Paste the link below:
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_SAMPLE_URL_HERE/pub?output=csv";
+// GOOGLE SHEET URL (CSV for Data Fetching)
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOfuB3T9ozdzxhTVT_vcudJsTv0khkrd-iIBJmSgi0UWGdOoZ_ObbPzsZ445VX-2XhYwIlKFYhd0V7/pub?output=csv";
+
+// GOOGLE SHEET EMBED URL (HTML for Iframe)
+const EMBED_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOfuB3T9ozdzxhTVT_vcudJsTv0khkrd-iIBJmSgi0UWGdOoZ_ObbPzsZ445VX-2XhYwIlKFYhd0V7/pubhtml?widget=true&headers=false";
 
 // ==========================================
 // 🚀 APP LOGIC (DO NOT EDIT BELOW)
@@ -15,15 +16,19 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_SAMPLE_URL
 const dashboardScreen = document.getElementById('dashboard-screen');
 const loadingOverlay = document.getElementById('loading-overlay');
 const logoutBtn = document.getElementById('logout-btn');
+const sheetFrame = document.getElementById('sheet-frame');
 
 // State
 let chartInstance = null;
 let pieInstance = null;
+let weeklyInstance = null;
+let socialInstance = null;
 
 // --- Initialization ---
 
 // Load data immediately
 loadData();
+if (sheetFrame) sheetFrame.src = EMBED_URL;
 
 // Hide logout button since there is no login
 if (logoutBtn) {
@@ -118,9 +123,7 @@ function renderDashboard(data) {
 
     // 2. Render Main Chart
     const ctx = document.getElementById('mainChart').getContext('2d');
-
     if (chartInstance) chartInstance.destroy();
-
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -138,18 +141,10 @@ function renderDashboard(data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                y: {
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#94a3b8' }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#94a3b8' }
-                }
+                y: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
             }
         }
     });
@@ -157,10 +152,8 @@ function renderDashboard(data) {
     // 3. Render Pie Chart (Categories)
     const catCounts = {};
     data.categories.forEach(c => catCounts[c] = (catCounts[c] || 0) + 1);
-
     const pieCtx = document.getElementById('pieChart').getContext('2d');
     if (pieInstance) pieInstance.destroy();
-
     pieInstance = new Chart(pieCtx, {
         type: 'doughnut',
         data: {
@@ -174,8 +167,63 @@ function renderDashboard(data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'right', labels: { color: '#94a3b8' } }
+            plugins: { legend: { position: 'right', labels: { color: '#94a3b8' } } }
+        }
+    });
+
+    // 4. Render Weekly Analysis Ranking (Bar Chart)
+    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+    if (weeklyInstance) weeklyInstance.destroy();
+    weeklyInstance = new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+            datasets: [{
+                label: 'Performance Score',
+                data: [65, 59, 80, 81], // Dummy data for now
+                backgroundColor: '#38bdf8',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+
+    // 5. Render Social Media Sentiment (Radar Chart)
+    const socialCtx = document.getElementById('socialChart').getContext('2d');
+    if (socialInstance) socialInstance.destroy();
+    socialInstance = new Chart(socialCtx, {
+        type: 'radar',
+        data: {
+            labels: ['Positive', 'Negative', 'Neutral', 'Engagement', 'Reach'],
+            datasets: [{
+                label: 'This Week',
+                data: [80, 20, 40, 90, 70],
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+            }, {
+                label: 'Last Week',
+                data: [60, 30, 50, 70, 60],
+                borderColor: '#94a3b8',
+                backgroundColor: 'rgba(148, 163, 184, 0.2)',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    pointLabels: { color: '#94a3b8' }
+                }
             }
         }
     });
