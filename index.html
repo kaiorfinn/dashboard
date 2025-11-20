@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Libraries (CDNs) -->
+    <!-- Chart.js for Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PapaParse for CSV Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboard-screen">
+        <header>
+            <div class="header-content">
+                <div class="logo">Analytics Dashboard</div>
+                <button id="logout-btn" class="logout-btn">Sign Out</button>
+            </div>
+        </header>
+
+        <main class="container">
+            <!-- Stats Row -->
+            <div class="stats-grid" id="stats-container">
+                <!-- Stats will be injected here by JS -->
+                <div class="stat-card">
+                    <div class="stat-title">Total Views</div>
+                    <div class="stat-value">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Active Users</div>
+                    <div class="stat-value">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Conversion Rate</div>
+                    <div class="stat-value">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2>Growth Trend</h2>
+                    <div class="chart-container">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h2>User Distribution</h2>
+                    <div class="chart-container">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- App Logic -->
+    <!-- Firebase SDKs -->
+    <script src="app.js"></script>
+</body>
+
+</html>
